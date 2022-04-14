@@ -1,6 +1,7 @@
-import styles from './Checkout.module.css';
-import { LoadingIcon } from './Icons';
-import { getProducts } from './dataService';
+import styles from "./Checkout.module.css";
+import { LoadingIcon } from "./Icons";
+import { getProducts } from "./dataService";
+import { useEffect, useState, useCallback } from "react";
 
 // You are provided with an incomplete <Checkout /> component.
 // You are not allowed to add any additional HTML elements.
@@ -20,34 +21,133 @@ import { getProducts } from './dataService';
 //  - The total should reflect any discount that has been applied
 //  - All dollar amounts should be displayed to 2 decimal places
 
+const formatNumbers = (number) => {
+  number = number || 0;
+  return parseFloat(number).toFixed(2);
+};
 
-
-const Product = ({ id, name, availableCount, price, orderedQuantity, total }) => {
+const Product = ({
+  id,
+  name,
+  availableCount,
+  price,
+  orderedQuantity,
+  total,
+  incrementProductQty,
+  decrementProductQty,
+}) => {
   return (
     <tr>
       <td>{id}</td>
       <td>{name}</td>
       <td>{availableCount}</td>
       <td>${price}</td>
-      <td>{orderedQuantity}</td>   
-      <td>${total}</td>
+      <td>{orderedQuantity}</td>
+      <td>${formatNumbers(total)}</td>
       <td>
-        <button className={styles.actionButton}>+</button>
-        <button className={styles.actionButton}>-</button>
+        <button
+          className={styles.actionButton}
+          onClick={() => incrementProductQty(id)}
+          disabled={orderedQuantity >= availableCount}
+        >
+          +
+        </button>
+        <button
+          className={styles.actionButton}
+          onClick={() => decrementProductQty(id)}
+          disabled={!orderedQuantity || orderedQuantity <= 0}
+        >
+          -
+        </button>
       </td>
-    </tr>    
+    </tr>
   );
-}
-
+};
 
 const Checkout = () => {
+  const [products, setProducts] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [orderSummary, setOrderSummary] = useState(0);
+  const [discount, setDiscount] = useState(0);
+
+  const loadProductsHandler = async () => {
+    setIsLoading(true);
+
+    const products = await getProducts();
+
+    setProducts(products);
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    loadProductsHandler();
+  }, []);
+
+  useEffect(() => {
+    if (orderSummary > 1000) {
+      setDiscount(orderSummary * 0.1);
+      return;
+    }
+
+    setDiscount(0);
+  }, [orderSummary]);
+
+  const incrementProductQty = useCallback(
+    (id) => {
+      const clonedProducts = [...products];
+      const product = clonedProducts.find((product) => {
+        return product.id === id;
+      });
+
+      if (!product) {
+        return;
+      }
+
+      product.orderedQuantity = product.orderedQuantity || 0;
+      product.orderedQuantity = product.orderedQuantity + 1;
+      product.total = product.total || 0;
+      product.total = product.total + product.price;
+
+      setProducts(clonedProducts);
+      setOrderSummary((prev) => prev + product.price);
+    },
+    [products]
+  );
+
+  const decrementProductQty = useCallback(
+    (id) => {
+      const clonedProducts = [...products];
+      const product = clonedProducts.find((product) => {
+        return product.id === id;
+      });
+
+      if (!product) {
+        return;
+      }
+
+      product.orderedQuantity = product.orderedQuantity || 0;
+
+      if (product.orderedQuantity === 0) {
+        return;
+      }
+
+      product.orderedQuantity = product.orderedQuantity - 1;
+      product.total = product.total || 0;
+      product.total = product.total - product.price;
+
+      setProducts(clonedProducts);
+      setOrderSummary((prev) => prev - product.price);
+    },
+    [products]
+  );
+
   return (
     <div>
-      <header className={styles.header}>        
-        <h1>Electro World</h1>        
+      <header className={styles.header}>
+        <h1>Electro World</h1>
       </header>
       <main>
-        <LoadingIcon />        
+        {isLoading && <LoadingIcon />}
         <table className={styles.table}>
           <thead>
             <tr>
@@ -62,12 +162,26 @@ const Checkout = () => {
             </tr>
           </thead>
           <tbody>
-          {/* Products should be rendered here */}
+            {products.map((product) => {
+              return (
+                <Product
+                  key={product.id}
+                  id={product.id}
+                  name={product.name}
+                  availableCount={product.availableCount}
+                  price={product.price}
+                  orderedQuantity={product.orderedQuantity}
+                  total={product.total}
+                  incrementProductQty={incrementProductQty}
+                  decrementProductQty={decrementProductQty}
+                />
+              );
+            })}
           </tbody>
         </table>
         <h2>Order summary</h2>
-        <p>Discount: $ </p>
-        <p>Total: $ </p>       
+        {discount > 0 && <p>Discount: {formatNumbers(discount)}$ </p>}
+        <p>Total: {formatNumbers(orderSummary - discount)}$ </p>
       </main>
     </div>
   );
